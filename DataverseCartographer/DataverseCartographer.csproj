@@ -1,0 +1,65 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net48</TargetFramework>
+    <OutputType>Library</OutputType>
+    <RootNamespace>DataverseCartographer</RootNamespace>
+    <AssemblyName>DataverseCartographer</AssemblyName>
+    <UseWindowsForms>true</UseWindowsForms>
+    <LangVersion>latest</LangVersion>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+
+    <!-- Informations d'assembly (affichées dans XrmToolBox) -->
+    <Version>1.0.0</Version>
+    <AssemblyVersion>1.0.0.0</AssemblyVersion>
+    <FileVersion>1.0.0.0</FileVersion>
+    <Product>Dataverse Cartographer</Product>
+    <AssemblyTitle>Dataverse Cartographer</AssemblyTitle>
+    <Description>Carte interactive des tables et relations (1:N, N:1, N:N) d'une organisation Dataverse.</Description>
+    <Company>AmraouiH</Company>
+    <Copyright>Copyright © 2026</Copyright>
+
+    <!-- Les assemblies XrmToolBox / SDK sont fournies par XrmToolBox : inutile de les copier en sortie -->
+    <CopyLocalLockFileAssemblies>false</CopyLocalLockFileAssemblies>
+    <GenerateBindingRedirectsOutputType>false</GenerateBindingRedirectsOutputType>
+
+    <!-- Débogage : copie de la DLL dans le dossier Plugins de XrmToolBox après chaque build Debug.
+         Désactivable avec : dotnet build -p:DeployToXrmToolBox=false -->
+    <DeployToXrmToolBox Condition="'$(DeployToXrmToolBox)' == ''">true</DeployToXrmToolBox>
+    <XrmToolBoxPluginsDir Condition="'$(XrmToolBoxPluginsDir)' == ''">$(APPDATA)\MscrmTools\XrmToolBox\Plugins</XrmToolBoxPluginsDir>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Seule dépendance : le package XrmToolBox (inclut le SDK Dataverse) -->
+    <PackageReference Include="XrmToolBoxPackage" Version="1.2025.10.74" />
+    <!-- XrmToolBoxPackage 1.2025.10.74 est compilé contre McTools.Xrm.Connection 1.2025.9.64 mais n'en déclare
+         que la 1.2025.7.63 : on épingle la bonne version (dépendance transitive, fournie par XrmToolBox à l'exécution). -->
+    <PackageReference Include="MscrmTools.Xrm.Connection" Version="1.2025.9.64" />
+    <!-- Assemblies de référence .NET Framework 4.8 (build possible sans le targeting pack installé) -->
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="System.ComponentModel.Composition" />
+    <Reference Include="System.IO.Compression" />
+    <Reference Include="System.Runtime.Serialization" />
+    <Reference Include="System.ServiceModel" />
+    <Reference Include="System.Xml.Linq" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Update="CartographerControl.cs" SubType="UserControl" />
+    <Compile Update="CartographerControl.Layout.cs" DependentUpon="CartographerControl.cs" />
+    <Compile Update="UI\Controls\*.cs" SubType="Component" />
+  </ItemGroup>
+
+  <!-- Copie de la DLL (+ pdb) dans %AppData%\MscrmTools\XrmToolBox\Plugins en Debug.
+       ContinueOnError : si XrmToolBox est ouvert, la DLL est verrouillée → simple avertissement. -->
+  <Target Name="DeployPluginToXrmToolBox" AfterTargets="Build" Condition="'$(Configuration)' == 'Debug' And '$(DeployToXrmToolBox)' == 'true'">
+    <MakeDir Directories="$(XrmToolBoxPluginsDir)" ContinueOnError="true" />
+    <Copy SourceFiles="$(TargetPath);$(TargetDir)$(TargetName).pdb" DestinationFolder="$(XrmToolBoxPluginsDir)" ContinueOnError="true" SkipUnchangedFiles="false" />
+    <Message Importance="high" Text="Dataverse Cartographer copié dans $(XrmToolBoxPluginsDir)" />
+  </Target>
+
+</Project>

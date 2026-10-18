@@ -1,0 +1,13 @@
+# Build output
+bin/
+obj/
+artifacts/
+*.nupkg
+
+# Visual Studio
+.vs/
+*.user
+*.suo
+
+# Legacy NuGet packages folder
+packages/
