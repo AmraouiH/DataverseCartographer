@@ -131,6 +131,7 @@ namespace DataverseCartographer.Services
         private static bool Matches(TableInfo table, GraphFilter filter)
         {
             if (filter.SolutionTables != null && !filter.SolutionTables.Contains(table.MetadataId)) return false;
+            if (filter.AppTables != null && !filter.AppTables.Contains(table.MetadataId)) return false;
             if (filter.OnlyUsedTables && table.HasActiveRecords == false) return false;
             if (!string.IsNullOrEmpty(filter.Prefix) && !string.Equals(table.Prefix, filter.Prefix, StringComparison.OrdinalIgnoreCase)) return false;
             switch (filter.Kind)

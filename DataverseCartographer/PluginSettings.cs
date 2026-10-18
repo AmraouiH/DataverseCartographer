@@ -18,9 +18,6 @@ namespace DataverseCartographer
 
         public bool HideIsolated { get; set; } = true;
 
-        /// <summary>Seulement les tables qui contiennent au moins un enregistrement actif.</summary>
-        public bool OnlyUsedTables { get; set; }
-
         public bool ShowManyToMany { get; set; } = true;
 
         public bool ShowSelfReferences { get; set; } = true;

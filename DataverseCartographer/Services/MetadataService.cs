@@ -89,6 +89,14 @@ namespace DataverseCartographer.Services
             {
                 Warning = (Warning == null ? string.Empty : Warning + " | ") + "Solutions: " + error.Message;
             }
+            try
+            {
+                model.Apps = LoadApps();
+            }
+            catch (Exception error)
+            {
+                Warning = (Warning == null ? string.Empty : Warning + " | ") + "Apps: " + error.Message;
+            }
             return model;
         }
 
@@ -215,6 +223,42 @@ namespace DataverseCartographer.Services
             {
                 var prefix = publisher.GetAttributeValue<string>("customizationprefix");
                 if (!string.IsNullOrEmpty(prefix) && !result.ContainsKey(prefix)) result[prefix] = publisher.GetAttributeValue<string>("friendlyname");
+            }
+            return result;
+        }
+
+        /// <summary>Model-driven apps of the organization.</summary>
+        private List<AppItem> LoadApps()
+        {
+            var query = new QueryExpression("appmodule")
+            {
+                ColumnSet = new ColumnSet("name", "uniquename", "ismanaged"),
+                Orders = { new OrderExpression("name", OrderType.Ascending) }
+            };
+            return RetrieveAll(query)
+                .Select(e => new AppItem
+                {
+                    Id = e.Id,
+                    Name = e.GetAttributeValue<string>("name") ?? e.GetAttributeValue<string>("uniquename"),
+                    UniqueName = e.GetAttributeValue<string>("uniquename"),
+                    IsManaged = e.GetAttributeValue<bool>("ismanaged")
+                })
+                .GroupBy(a => a.Id).Select(g => g.First())
+                .ToList();
+        }
+
+        /// <summary>Metadata ids of the tables of a model-driven app (its entity components, sitemap included).</summary>
+        public HashSet<Guid> LoadAppTables(Guid appId)
+        {
+            var response = _service.Execute(new OrganizationRequest("RetrieveAppComponents") { ["AppModuleId"] = appId });
+            var result = new HashSet<Guid>();
+            if (response.Results.TryGetValue("AppComponents", out var value) && value is EntityCollection components)
+            {
+                foreach (var component in components.Entities)
+                {
+                    var type = component.GetAttributeValue<OptionSetValue>("componenttype")?.Value ?? (component.Contains("componenttype") ? Convert.ToInt32(component["componenttype"]) : 0);
+                    if (type == EntityComponentType) result.Add(component.GetAttributeValue<Guid>("objectid"));
+                }
             }
             return result;
         }

@@ -151,6 +151,17 @@ namespace DataverseCartographer.Models
         public override string ToString() => $"{FriendlyName} ({Version}){(IsManaged ? " · managed" : string.Empty)}";
     }
 
+    /// <summary>A model-driven app (appmodule).</summary>
+    public sealed class AppItem
+    {
+        public Guid Id { get; set; }
+        public string Name { get; set; }
+        public string UniqueName { get; set; }
+        public bool IsManaged { get; set; }
+
+        public override string ToString() => IsManaged ? $"{Name} · managed" : Name;
+    }
+
     /// <summary>
     /// Everything loaded for one organization: tables, relationships, solutions and publishers.
     /// </summary>
@@ -159,6 +170,10 @@ namespace DataverseCartographer.Models
         public Dictionary<string, TableInfo> Tables { get; } = new Dictionary<string, TableInfo>(StringComparer.OrdinalIgnoreCase);
         public List<RelationInfo> Relations { get; } = new List<RelationInfo>();
         public List<SolutionItem> Solutions { get; set; } = new List<SolutionItem>();
+        public List<AppItem> Apps { get; set; } = new List<AppItem>();
+
+        /// <summary>Tables of each model-driven app (metadata ids), cached once read.</summary>
+        public Dictionary<Guid, HashSet<Guid>> AppTables { get; } = new Dictionary<Guid, HashSet<Guid>>();
 
         /// <summary>Publisher friendly name by customization prefix.</summary>
         public Dictionary<string, string> Publishers { get; set; } = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);

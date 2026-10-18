@@ -29,8 +29,8 @@ namespace DataverseCartographer
 
         // Filters
         private CardPanel cardFilters;
-        private Label lblSolution, lblPublisher, lblTableKind;
-        private ComboBox cboSolution, cboPublisher, cboTableKind;
+        private Label lblSolution, lblApp, lblPublisher, lblTableKind;
+        private ComboBox cboSolution, cboApp, cboPublisher, cboTableKind;
         private CheckBox chkHideSystem, chkHideIsolated, chkOnlyUsed, chkManyToMany, chkSelf;
 
         // Explore
@@ -199,11 +199,13 @@ namespace DataverseCartographer
 
         private void BuildFilters()
         {
-            cardFilters = new CardPanel { Dock = DockStyle.Top, Height = 418, Step = 1 };
+            cardFilters = new CardPanel { Dock = DockStyle.Top, Height = 474, Step = 1 };
             var stack = Stack();
 
             lblSolution = FieldLabel();
             cboSolution = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Dock = DockStyle.Top, MaxDropDownItems = 25, DropDownWidth = 420 };
+            lblApp = FieldLabel();
+            cboApp = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Dock = DockStyle.Top, MaxDropDownItems = 25, DropDownWidth = 360 };
             lblPublisher = FieldLabel();
             cboPublisher = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Dock = DockStyle.Top, MaxDropDownItems = 25, DropDownWidth = 320 };
             lblTableKind = FieldLabel();
@@ -215,7 +217,7 @@ namespace DataverseCartographer
             chkSelf = Check();
             chkHideSystem.Margin = new Padding(0, 12, 0, 0);
 
-            AddRows(stack, lblSolution, cboSolution, lblPublisher, cboPublisher, lblTableKind, cboTableKind, chkHideSystem, chkHideIsolated, chkOnlyUsed, chkManyToMany, chkSelf);
+            AddRows(stack, lblSolution, cboSolution, lblApp, cboApp, lblPublisher, cboPublisher, lblTableKind, cboTableKind, chkHideSystem, chkHideIsolated, chkOnlyUsed, chkManyToMany, chkSelf);
             cardFilters.Controls.Add(stack);
         }
 

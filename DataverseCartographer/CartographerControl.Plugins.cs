@@ -214,7 +214,7 @@ namespace DataverseCartographer
             lblPluginDepth.Text = Strings.DepthLabel;
             btnPluginExplore.Text = Strings.ShowFocus;
             btnPluginWholeMap.Text = Strings.ClearFocus;
-            lblPluginHint.Text = Strings.PluginHint;
+            lblPluginHint.Text = Strings.PluginHint + " " + Strings.LegendHint + ".";
             Theme.SetCue(cboPluginFocus, Strings.PluginFocusCue);
 
             lblPluginLayout.Text = Strings.LayoutLabel;
@@ -235,13 +235,14 @@ namespace DataverseCartographer
 
             pluginCanvas.Legend = new[]
             {
-                new GraphCanvas.LegendItem(Strings.LegendTable, Theme.StandardTable, GraphCanvas.LegendStyle.Dot),
-                new GraphCanvas.LegendItem(Strings.LegendPlugin, GraphRenderer.PluginNode, GraphCanvas.LegendStyle.Square),
-                new GraphCanvas.LegendItem(Strings.LegendSyncStep, GraphRenderer.SyncTrigger, GraphCanvas.LegendStyle.Line),
-                new GraphCanvas.LegendItem(Strings.LegendAsyncStep, GraphRenderer.AsyncTrigger, GraphCanvas.LegendStyle.Line),
-                new GraphCanvas.LegendItem(Strings.LegendWrite, GraphRenderer.WriteAction, GraphCanvas.LegendStyle.Line),
-                new GraphCanvas.LegendItem(Strings.LegendRead, GraphRenderer.ReadAction, GraphCanvas.LegendStyle.Dashed)
+                new GraphCanvas.LegendItem(Strings.LegendTable, Theme.StandardTable, GraphCanvas.LegendStyle.Dot, "table", nodes: n => n.Kind == NodeKind.Table),
+                new GraphCanvas.LegendItem(Strings.LegendPlugin, GraphRenderer.PluginNode, GraphCanvas.LegendStyle.Square, "plugin", nodes: n => n.Kind == NodeKind.Plugin),
+                new GraphCanvas.LegendItem(Strings.LegendSyncStep, GraphRenderer.SyncTrigger, GraphCanvas.LegendStyle.Line, "sync", edges: e => e.Kind == EdgeKind.Trigger && !e.Async),
+                new GraphCanvas.LegendItem(Strings.LegendAsyncStep, GraphRenderer.AsyncTrigger, GraphCanvas.LegendStyle.Line, "async", edges: e => e.Kind == EdgeKind.Trigger && e.Async),
+                new GraphCanvas.LegendItem(Strings.LegendWrite, GraphRenderer.WriteAction, GraphCanvas.LegendStyle.Line, "write", edges: e => e.Kind == EdgeKind.Action && !e.Muted),
+                new GraphCanvas.LegendItem(Strings.LegendRead, GraphRenderer.ReadAction, GraphCanvas.LegendStyle.Dashed, "read", linked: chkShowReads)
             };
+            SyncLegends();
             pluginCanvas.EmptyText = _plugins == null ? Strings.PluginsEmptyNotLoaded : Strings.PluginsEmptyNoMatch;
             pluginCanvas.Invalidate();
             UpdatePluginStatus();
@@ -553,6 +554,8 @@ namespace DataverseCartographer
             var previous = _pluginGraph;
             var selected = pluginCanvas.SelectedNode?.Key;
             var graph = PluginGraphBuilder.Build(_plugins, _model, filter);
+            SyncLegends();
+            pluginCanvas.ApplyLegendFilter(graph);
             if (!chkAnalyzeCode.Checked)
             {
                 graph.Edges.RemoveAll(e => e.Kind == EdgeKind.Action);

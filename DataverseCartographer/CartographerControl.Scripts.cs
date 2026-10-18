@@ -195,7 +195,7 @@ namespace DataverseCartographer
             lblScriptDepth.Text = Strings.DepthLabel;
             btnScriptExplore.Text = Strings.ShowFocus;
             btnScriptWholeMap.Text = Strings.ClearFocus;
-            lblScriptHint.Text = Strings.ScriptHint;
+            lblScriptHint.Text = Strings.ScriptHint + " " + Strings.LegendHint + ".";
             Theme.SetCue(cboScriptFocus, Strings.ScriptFocusCue);
 
             lblScriptLayout.Text = Strings.LayoutLabel;
@@ -216,13 +216,14 @@ namespace DataverseCartographer
 
             scriptCanvas.Legend = new[]
             {
-                new GraphCanvas.LegendItem(Strings.LegendTable, Theme.StandardTable, GraphCanvas.LegendStyle.Dot),
-                new GraphCanvas.LegendItem(Strings.LegendScript, GraphRenderer.ScriptNode, GraphCanvas.LegendStyle.Square),
-                new GraphCanvas.LegendItem(Strings.LegendFormEvent, GraphRenderer.SyncTrigger, GraphCanvas.LegendStyle.Line),
-                new GraphCanvas.LegendItem(Strings.LegendLoaded, Theme.GhostTable, GraphCanvas.LegendStyle.Dashed),
-                new GraphCanvas.LegendItem(Strings.LegendWrite, GraphRenderer.WriteAction, GraphCanvas.LegendStyle.Line),
-                new GraphCanvas.LegendItem(Strings.LegendRead, GraphRenderer.ReadAction, GraphCanvas.LegendStyle.Dashed)
+                new GraphCanvas.LegendItem(Strings.LegendTable, Theme.StandardTable, GraphCanvas.LegendStyle.Dot, "table", nodes: n => n.Kind == NodeKind.Table),
+                new GraphCanvas.LegendItem(Strings.LegendScript, GraphRenderer.ScriptNode, GraphCanvas.LegendStyle.Square, "script", nodes: n => n.Kind == NodeKind.Script),
+                new GraphCanvas.LegendItem(Strings.LegendFormEvent, GraphRenderer.SyncTrigger, GraphCanvas.LegendStyle.Line, "event", edges: e => e.Kind == EdgeKind.Trigger && !e.Muted),
+                new GraphCanvas.LegendItem(Strings.LegendLoaded, Theme.GhostTable, GraphCanvas.LegendStyle.Dashed, "loaded", edges: e => e.Kind == EdgeKind.Trigger && e.Muted),
+                new GraphCanvas.LegendItem(Strings.LegendWrite, GraphRenderer.WriteAction, GraphCanvas.LegendStyle.Line, "write", edges: e => e.Kind == EdgeKind.Action && !e.Muted),
+                new GraphCanvas.LegendItem(Strings.LegendRead, GraphRenderer.ReadAction, GraphCanvas.LegendStyle.Dashed, "read", linked: chkScriptReads)
             };
+            SyncLegends();
             scriptCanvas.EmptyText = _scripts == null ? Strings.ScriptsEmptyNotLoaded : Strings.ScriptsEmptyNoMatch;
             scriptCanvas.Invalidate();
             UpdateScriptStatus();
@@ -485,6 +486,8 @@ namespace DataverseCartographer
             var previous = _scriptGraph;
             var selected = scriptCanvas.SelectedNode?.Key;
             var graph = ScriptGraphBuilder.Build(_scripts, _model, filter);
+            SyncLegends();
+            scriptCanvas.ApplyLegendFilter(graph);
             if (!chkAnalyzeScripts.Checked)
             {
                 graph.Edges.RemoveAll(e => e.Kind == EdgeKind.Action);

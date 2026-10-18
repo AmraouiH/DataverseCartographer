@@ -163,6 +163,7 @@ namespace DataverseCartographer
                 cardFilters.Title = Strings.FiltersTitle;
                 cardFilters.Subtitle = Strings.FiltersSubtitle;
                 lblSolution.Text = Strings.SolutionLabel;
+                lblApp.Text = Strings.AppLabel;
                 lblPublisher.Text = Strings.PublisherLabel;
                 lblTableKind.Text = Strings.TablesLabel;
                 Refill(cboTableKind, Strings.TableKinds);
@@ -176,6 +177,7 @@ namespace DataverseCartographer
                 toolTip.SetToolTip(chkHideIsolated, Strings.HideIsolatedTip);
                 toolTip.SetToolTip(chkSelf, Strings.ShowSelfTip);
                 FillSolutions();
+                FillApps();
                 FillPublishers();
 
                 cardExplore.Title = Strings.ExploreTitle;
@@ -188,7 +190,7 @@ namespace DataverseCartographer
                 btnBack.Text = Strings.PreviousFocus;
                 btnClearFocus.Text = Strings.ClearFocus;
                 lnkShowHidden.Text = Strings.ShowHiddenTables;
-                lblExploreHint.Text = Strings.ExploreHint;
+                lblExploreHint.Text = Strings.ExploreHint + " " + Strings.LegendHint + ".";
                 Theme.SetCue(cboFocus, Strings.FocusCue);
 
                 lblLayout.Text = Strings.LayoutLabel;
@@ -240,13 +242,18 @@ namespace DataverseCartographer
                 SetHeaders(dgvSteps, Strings.ColMessage, Strings.ColStage, Strings.ColMode, Strings.ColRank, Strings.ColPlugin, Strings.ColFilteringAttributes, Strings.ColState);
                 canvas.Legend = new[]
                 {
-                    new GraphCanvas.LegendItem(Strings.LegendCustom, Theme.CustomTable, GraphCanvas.LegendStyle.Dot),
-                    new GraphCanvas.LegendItem(Strings.LegendStandard, Theme.StandardTable, GraphCanvas.LegendStyle.Dot),
-                    new GraphCanvas.LegendItem(Strings.LegendFocus, Theme.FocusTable, GraphCanvas.LegendStyle.Dot),
-                    new GraphCanvas.LegendItem(Strings.LegendOneToMany, Theme.Edge, GraphCanvas.LegendStyle.Line),
-                    new GraphCanvas.LegendItem(Strings.LegendManyToMany, Theme.EdgeManyToMany, GraphCanvas.LegendStyle.Dashed),
-                    new GraphCanvas.LegendItem(Strings.LegendCascadeDelete, GraphRenderer.CascadeDeleteEdge, GraphCanvas.LegendStyle.Line)
+                    new GraphCanvas.LegendItem(Strings.LegendCustom, Theme.CustomTable, GraphCanvas.LegendStyle.Dot, "custom",
+                        nodes: n => n.Table != null && n.Table.IsCustom),
+                    new GraphCanvas.LegendItem(Strings.LegendStandard, Theme.StandardTable, GraphCanvas.LegendStyle.Dot, "standard",
+                        nodes: n => n.Table != null && !n.Table.IsCustom),
+                    new GraphCanvas.LegendItem(Strings.LegendFocus, Theme.FocusTable, GraphCanvas.LegendStyle.Dot, LegendFocusKey),
+                    new GraphCanvas.LegendItem(Strings.LegendOneToMany, Theme.Edge, GraphCanvas.LegendStyle.Line, "1n",
+                        edges: e => e.Relation != null && e.Relation.Kind == RelationKind.OneToMany && e.Relation.Cascade?.CascadesDelete != true),
+                    new GraphCanvas.LegendItem(Strings.LegendManyToMany, Theme.EdgeManyToMany, GraphCanvas.LegendStyle.Dashed, "nn", linked: chkManyToMany),
+                    new GraphCanvas.LegendItem(Strings.LegendCascadeDelete, GraphRenderer.CascadeDeleteEdge, GraphCanvas.LegendStyle.Line, "cascade",
+                        edges: e => e.Relation != null && e.Relation.Cascade?.CascadesDelete == true)
                 };
+                SyncLegends();
                 ApplyPluginsLanguage();
                 ApplyScriptsLanguage();
             }
@@ -301,11 +308,12 @@ namespace DataverseCartographer
             tsbDonate.Click += (s, e) => OpenUrl(DonateUrl);
 
             cboSolution.SelectedIndexChanged += (s, e) => OnFilterChanged();
+            cboApp.SelectedIndexChanged += (s, e) => OnFilterChanged();
             cboPublisher.SelectedIndexChanged += (s, e) => OnFilterChanged();
             cboTableKind.SelectedIndexChanged += (s, e) => OnFilterChanged();
             chkHideSystem.CheckedChanged += (s, e) => OnFilterChanged();
             chkHideIsolated.CheckedChanged += (s, e) => OnFilterChanged();
-            chkOnlyUsed.CheckedChanged += (s, e) => OnFilterChanged();
+            chkOnlyUsed.CheckedChanged += (s, e) => OnOnlyUsedChanged();
             chkManyToMany.CheckedChanged += (s, e) => OnFilterChanged();
             chkSelf.CheckedChanged += (s, e) => OnFilterChanged();
             chkBoundary.CheckedChanged += (s, e) => OnFilterChanged();
@@ -359,6 +367,9 @@ namespace DataverseCartographer
             };
             txtSearch.KeyDown += TxtSearch_KeyDown;
 
+            canvas.LegendItemToggled += (s, item) => OnLegendToggled(canvas, item);
+            pluginCanvas.LegendItemToggled += (s, item) => OnLegendToggled(pluginCanvas, item);
+            scriptCanvas.LegendItemToggled += (s, item) => OnLegendToggled(scriptCanvas, item);
             canvas.SelectionChanged += (s, e) =>
             {
                 ShowDetails();
@@ -392,6 +403,84 @@ namespace DataverseCartographer
             };
         }
 
+        /// <summary>
+        /// « Only tables with data » is off when the tool opens. Checking it the first time asks for confirmation:
+        /// every table is queried on the server, which can take a while on a large organization.
+        /// </summary>
+        private void OnOnlyUsedChanged()
+        {
+            if (_suppressEvents || !_controlLoaded) return;
+            if (chkOnlyUsed.Checked && _model != null && !_model.UsageLoaded)
+            {
+                var tables = _model.Tables.Values.Count(t => !t.IsPrivate && !t.IsIntersect);
+                var confirmed = MessageDialog.Ask(this, MessageKind.Warning, Strings.UsageConfirmTitle, Strings.UsageConfirmMessage(tables), null,
+                    Strings.UsageConfirmQuestion, Strings.UsageConfirmYes, Strings.UsageConfirmNo);
+                if (!confirmed)
+                {
+                    _suppressEvents = true;
+                    chkOnlyUsed.Checked = false;
+                    _suppressEvents = false;
+                    return;
+                }
+            }
+            OnFilterChanged();
+        }
+
+        private const string LegendFocusKey = "focus";
+        private string _legendFocus;
+
+        /// <summary>
+        /// A legend item was clicked: it hides / shows its category of nodes or edges, drives its check box,
+        /// or (Focus) clears and restores the exploration around the focus table.
+        /// </summary>
+        private void OnLegendToggled(GraphCanvas source, GraphCanvas.LegendItem item)
+        {
+            if (item.Linked is CheckBox check)
+            {
+                check.Checked = item.Active; // the check box handler rebuilds the map
+                return;
+            }
+            if (item.Key == LegendFocusKey)
+            {
+                if (!item.Active && _focus != null)
+                {
+                    _legendFocus = _focus;
+                    SetFocusTable(null);
+                }
+                else if (item.Active && _legendFocus != null)
+                {
+                    var focus = _legendFocus;
+                    _legendFocus = null;
+                    SetFocusTable(focus);
+                }
+                else
+                {
+                    item.Active = !item.Active; // nothing to clear or restore: the click is ignored
+                    source.Invalidate();
+                }
+                return;
+            }
+            if (source == canvas) RebuildGraph(false);
+            else if (source == pluginCanvas) RebuildPluginGraph(false);
+            else RebuildScriptGraph(false);
+        }
+
+        /// <summary>Legend items driven by a check box (or by the focus) follow it.</summary>
+        private void SyncLegends()
+        {
+            foreach (var target in new[] { canvas, pluginCanvas, scriptCanvas })
+            {
+                if (target == null) continue;
+                foreach (var item in target.Legend)
+                {
+                    if (item.Linked is CheckBox check) item.Active = check.Checked;
+                }
+                target.Invalidate();
+            }
+            var focusItem = canvas?.FindLegend(LegendFocusKey);
+            if (focusItem != null) focusItem.Active = _focus != null || _legendFocus == null;
+        }
+
         private void OnFilterChanged()
         {
             if (_suppressEvents || !_controlLoaded) return;
@@ -419,7 +508,6 @@ namespace DataverseCartographer
             cboTableKind.SelectedIndex = Clamp(_settings.TableKind, cboTableKind.Items.Count);
             chkHideSystem.Checked = _settings.HideSystemTables;
             chkHideIsolated.Checked = _settings.HideIsolated;
-            chkOnlyUsed.Checked = _settings.OnlyUsedTables;
             chkManyToMany.Checked = _settings.ShowManyToMany;
             chkSelf.Checked = _settings.ShowSelfReferences;
             chkBoundary.Checked = _settings.ShowBoundary;
@@ -466,6 +554,7 @@ namespace DataverseCartographer
             _scriptFocus = null;
             scriptCanvas.Graph = null;
             FillSolutions();
+            FillApps();
             FillPublishers();
             FillFocusTables();
             ShowDetails();
@@ -505,7 +594,6 @@ namespace DataverseCartographer
             _settings.TableKind = cboTableKind.SelectedIndex;
             _settings.HideSystemTables = chkHideSystem.Checked;
             _settings.HideIsolated = chkHideIsolated.Checked;
-            _settings.OnlyUsedTables = chkOnlyUsed.Checked;
             _settings.ShowManyToMany = chkManyToMany.Checked;
             _settings.ShowSelfReferences = chkSelf.Checked;
             _settings.ShowBoundary = chkBoundary.Checked;
@@ -555,6 +643,7 @@ namespace DataverseCartographer
 
                     _suppressEvents = true;
                     FillSolutions();
+                    FillApps();
                     FillPublishers();
                     FillFocusTables();
                     FillPluginSolutions();
@@ -583,6 +672,26 @@ namespace DataverseCartographer
             cboSolution.EndUpdate();
             _suppressEvents = wasSuppressed;
         }
+
+        private void FillApps()
+        {
+            var previous = SelectedApp;
+            var wasSuppressed = _suppressEvents;
+            _suppressEvents = true;
+            cboApp.BeginUpdate();
+            cboApp.Items.Clear();
+            cboApp.Items.Add(new ComboItem { Text = Strings.AllApps });
+            foreach (var app in _model?.Apps ?? new List<AppItem>())
+            {
+                cboApp.Items.Add(new ComboItem { Text = app.ToString(), Value = app });
+            }
+            var index = previous == null ? 0 : cboApp.Items.Cast<ComboItem>().ToList().FindIndex(i => (i.Value as AppItem)?.Id == previous.Id);
+            cboApp.SelectedIndex = Math.Max(0, index);
+            cboApp.EndUpdate();
+            _suppressEvents = wasSuppressed;
+        }
+
+        private AppItem SelectedApp => (cboApp.SelectedItem as ComboItem)?.Value as AppItem;
 
         private void FillPublishers()
         {
@@ -627,9 +736,10 @@ namespace DataverseCartographer
 
         #region Graph
 
-        private GraphFilter CurrentFilter(HashSet<Guid> solutionTables) => new GraphFilter
+        private GraphFilter CurrentFilter(HashSet<Guid> solutionTables, HashSet<Guid> appTables) => new GraphFilter
         {
             SolutionTables = solutionTables,
+            AppTables = appTables,
             Prefix = (cboPublisher.SelectedItem as ComboItem)?.Value as string,
             Kind = (TableKindFilter)Math.Max(0, cboTableKind.SelectedIndex),
             HideSystemTables = chkHideSystem.Checked,
@@ -683,6 +793,35 @@ namespace DataverseCartographer
                 return;
             }
 
+            var app = SelectedApp;
+            HashSet<Guid> appTables = null;
+            if (app != null && !_model.AppTables.TryGetValue(app.Id, out appTables))
+            {
+                var appModel = _model;
+                RunWork(new WorkAsyncInfo
+                {
+                    Message = Strings.ReadingAppTables(app.Name),
+                    Work = (worker, args) => args.Result = new MetadataService(Service).LoadAppTables(app.Id),
+                    PostWorkCallBack = e =>
+                    {
+                        if (e.Error != null)
+                        {
+                            ShowError(Strings.AppFailed, e.Error);
+                            _suppressEvents = true;
+                            cboApp.SelectedIndex = 0; // back to every table, so that the error is not raised again
+                            _suppressEvents = false;
+                        }
+                        else
+                        {
+                            appModel.AppTables[app.Id] = (HashSet<Guid>)e.Result;
+                            LogInfo("App {0}: {1} tables.", app.UniqueName, appModel.AppTables[app.Id].Count);
+                        }
+                        if (appModel == _model) RebuildGraph(relayout);
+                    }
+                });
+                return;
+            }
+
             if (chkOnlyUsed.Checked && !_model.UsageLoaded)
             {
                 var usageModel = _model;
@@ -709,7 +848,9 @@ namespace DataverseCartographer
 
             var previous = _graph;
             var selected = canvas.SelectedNode?.Table.LogicalName;
-            var graph = GraphBuilder.Build(_model, CurrentFilter(solutionTables));
+            var graph = GraphBuilder.Build(_model, CurrentFilter(solutionTables, appTables));
+            SyncLegends();
+            canvas.ApplyLegendFilter(graph);
 
             var keepPositions = !relayout && previous != null && graph.Nodes.All(n => previous.Find(n.Table.LogicalName) != null);
             if (keepPositions)
@@ -800,6 +941,7 @@ namespace DataverseCartographer
             }
             if (remember) _focusHistory.Push(_focus);
             _focus = logicalName;
+            if (logicalName != null) _legendFocus = null;
             if (logicalName != null) _excluded.Remove(logicalName);
             cboFocus.Text = _model.Find(_focus)?.ToString() ?? string.Empty;
             RebuildGraph(true);
@@ -1339,13 +1481,16 @@ namespace DataverseCartographer
             var focus = _model?.Find(_focus);
             if (focus != null) return Strings.ScopeFocus(focus.Label, (int)numDepth.Value);
             var solution = SelectedSolution;
-            return solution != null ? Strings.ScopeSolution(solution.FriendlyName) : Strings.ScopeAllTables;
+            var scopes = new List<string>();
+            if (SelectedApp != null) scopes.Add(Strings.ScopeApp(SelectedApp.Name));
+            if (solution != null) scopes.Add(Strings.ScopeSolution(solution.FriendlyName));
+            return scopes.Count > 0 ? string.Join(" · ", scopes) : Strings.ScopeAllTables;
         }
 
         private string DefaultFileName(string extension)
         {
             var name = new StringBuilder(tabsMain.SelectedIndex == PagePlugins ? "plugins" : tabsMain.SelectedIndex == PageScripts ? "javascript" : "datamodel");
-            var scope = _model?.Find(_focus)?.LogicalName ?? SelectedSolution?.UniqueName;
+            var scope = _model?.Find(_focus)?.LogicalName ?? SelectedApp?.UniqueName ?? SelectedSolution?.UniqueName;
             if (!string.IsNullOrEmpty(scope)) name.Append('-').Append(scope);
             if (!string.IsNullOrEmpty(OrganizationName)) name.Append('-').Append(OrganizationName);
             var safe = new string(name.ToString().Select(c => Path.GetInvalidFileNameChars().Contains(c) || c == ' ' ? '_' : c).ToArray());

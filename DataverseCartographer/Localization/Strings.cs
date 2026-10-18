@@ -81,6 +81,11 @@ namespace DataverseCartographer.Localization
         public static string FiltersSubtitle => T("Which tables make up the map", "Quelles tables composent la carte");
         public static string SolutionLabel => T("Solution", "Solution");
         public static string AllSolutions => T("All tables (no solution filter)", "Toutes les tables (sans filtre solution)");
+        public static string AppLabel => T("Model-driven app", "Application pilotée par modèle");
+        public static string AllApps => T("All tables (no app filter)", "Toutes les tables (sans filtre application)");
+        public static string ReadingAppTables(string app) => T($"Reading the tables of the app {app}…", $"Lecture des tables de l'application {app}…");
+        public static string AppFailed => T("The tables of the app could not be read", "Les tables de l'application n'ont pas pu être lues");
+        public static string ScopeApp(string app) => T($"app {app}", $"application {app}");
         public static string PublisherLabel => T("Publisher prefix", "Préfixe d'éditeur");
         public static string AllPublishers => T("All prefixes", "Tous les préfixes");
         public static string PublisherItem(string prefix, string name, int count) =>
@@ -99,6 +104,13 @@ namespace DataverseCartographer.Localization
         public static string OnlyUsedTablesTip => T(
             "Hides the tables without any active record (statecode = 0; any record for activities and tables without status). Checked once per connection on the server; tables that cannot be read stay visible.",
             "Masque les tables sans aucun enregistrement actif (statecode = 0 ; tout enregistrement pour les activités et les tables sans statut). Vérifié une fois par connexion sur le serveur ; les tables illisibles restent visibles.");
+        public static string UsageConfirmTitle => T("Check the tables that hold data?", "Vérifier les tables qui contiennent des données ?");
+        public static string UsageConfirmMessage(int tables) => T(
+            $"To keep only the tables with at least one active record, the tool queries each of the {tables:N0} tables of the organization. Depending on its size, this can take from a few seconds to several minutes. It is done once per connection.",
+            $"Pour ne garder que les tables qui ont au moins un enregistrement actif, l'outil interroge chacune des {tables:N0} tables de l'organisation. Selon sa taille, cela peut prendre de quelques secondes à plusieurs minutes. La vérification n'est faite qu'une fois par connexion.");
+        public static string UsageConfirmQuestion => T("Is that OK for you?", "Est-ce que c'est OK pour toi ?");
+        public static string UsageConfirmYes => T("Yes, check the tables", "Oui, vérifier les tables");
+        public static string UsageConfirmNo => T("Cancel", "Annuler");
         public static string CheckingUsageTitle => T("Checking which tables hold data…", "Vérification des tables qui contiennent des données…");
         public static string ReadingRecordCounts => T("Reading the record counts…", "Lecture du nombre d'enregistrements…");
         public static string CheckingUsage(int done, int total) => T($"Looking for active records ({done}/{total} tables)…", $"Recherche d'enregistrements actifs ({done}/{total} tables)…");
@@ -174,6 +186,7 @@ namespace DataverseCartographer.Localization
         public static string LegendFocus => T("Focus", "Centre");
         public static string LegendOneToMany => "1:N";
         public static string LegendManyToMany => "N:N";
+        public static string LegendHint => T("Click a legend item to hide / show it", "Cliquez sur un élément de la légende pour le masquer / l'afficher");
         public static string LegendCascadeDelete => T("Cascade delete", "Suppression en cascade");
 
         #endregion

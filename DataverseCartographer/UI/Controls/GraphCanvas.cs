@@ -43,6 +43,9 @@ namespace DataverseCartographer.UI.Controls
         public event EventHandler<GraphNode> NodeDoubleClicked;
         public event EventHandler<NodeMenuEventArgs> NodeMenuRequested;
 
+        /// <summary>A legend item was clicked (its <see cref="LegendItem.Active"/> state has already been toggled).</summary>
+        public event EventHandler<LegendItem> LegendItemToggled;
+
         public enum LegendStyle
         {
             Dot,
@@ -51,18 +54,43 @@ namespace DataverseCartographer.UI.Controls
             Dashed
         }
 
+        /// <summary>
+        /// Item of the legend. Clicking it toggles <see cref="Active"/>: an inactive item hides the nodes / edges it describes
+        /// (see <see cref="ApplyLegendFilter"/>), or drives an option of the host (<see cref="Linked"/>).
+        /// </summary>
         public sealed class LegendItem
         {
-            public LegendItem(string text, Color color, LegendStyle style)
+            public LegendItem(string text, Color color, LegendStyle style, string key = null,
+                Func<GraphNode, bool> nodes = null, Func<GraphEdge, bool> edges = null, object linked = null)
             {
                 Text = text;
                 Color = color;
                 Style = style;
+                Key = key ?? text;
+                NodeMatch = nodes;
+                EdgeMatch = edges;
+                Linked = linked;
             }
 
             public string Text { get; }
             public Color Color { get; }
             public LegendStyle Style { get; }
+
+            /// <summary>Stable identifier (the state survives a change of language).</summary>
+            public string Key { get; }
+
+            public bool Active { get; set; } = true;
+
+            /// <summary>Nodes hidden while the item is inactive.</summary>
+            public Func<GraphNode, bool> NodeMatch { get; }
+
+            /// <summary>Edges hidden while the item is inactive.</summary>
+            public Func<GraphEdge, bool> EdgeMatch { get; }
+
+            /// <summary>Option of the host driven by the item (a check box, for example), handled by the host.</summary>
+            public object Linked { get; }
+
+            internal Rectangle Bounds;
         }
 
         public sealed class NodeMenuEventArgs : EventArgs
@@ -154,9 +182,46 @@ namespace DataverseCartographer.UI.Controls
 
         public float ZoomLevel => _scale;
 
-        /// <summary>Items of the legend drawn at the bottom left.</summary>
+        private LegendItem[] _legend = new LegendItem[0];
+        private LegendItem _hoverLegend;
+        private bool _legendClick;
+
+        /// <summary>Items of the legend drawn at the bottom left (the active state of items with the same key is kept).</summary>
         [Browsable(false), DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
-        public LegendItem[] Legend { get; set; } = new LegendItem[0];
+        public LegendItem[] Legend
+        {
+            get => _legend;
+            set
+            {
+                var items = value ?? new LegendItem[0];
+                foreach (var item in items)
+                {
+                    var previous = _legend.FirstOrDefault(i => i.Key == item.Key);
+                    if (previous != null) item.Active = previous.Active;
+                }
+                _legend = items;
+                Invalidate();
+            }
+        }
+
+        public LegendItem FindLegend(string key) => _legend.FirstOrDefault(i => i.Key == key);
+
+        /// <summary>Removes from a freshly built graph the nodes and edges of the inactive legend items (the focus node always stays).</summary>
+        public void ApplyLegendFilter(Graph graph)
+        {
+            if (graph == null) return;
+            var inactive = _legend.Where(i => !i.Active).ToList();
+            if (inactive.Count == 0) return;
+
+            var hiddenNodes = new HashSet<GraphNode>(graph.Nodes.Where(n => !n.IsFocus && inactive.Any(i => i.NodeMatch != null && i.NodeMatch(n))));
+            graph.Nodes.RemoveAll(hiddenNodes.Contains);
+            graph.Edges.RemoveAll(e => hiddenNodes.Contains(e.Source) || hiddenNodes.Contains(e.Target) || inactive.Any(i => i.EdgeMatch != null && i.EdgeMatch(e)));
+            graph.ByName.Clear();
+            foreach (var node in graph.Nodes) graph.ByName[node.Key] = node;
+            Services.GraphBuilder.AssignParallelIndexes(graph);
+        }
+
+        private LegendItem LegendAt(Point location) => _legend.FirstOrDefault(i => i.Bounds.Contains(location));
 
         #endregion
 
@@ -308,52 +373,69 @@ namespace DataverseCartographer.UI.Controls
 
         private void DrawLegend(Graphics g)
         {
-            var items = Legend ?? new LegendItem[0];
+            var items = _legend;
+            foreach (var item in items) item.Bounds = Rectangle.Empty;
             if (items.Length == 0) return;
 
             g.SmoothingMode = SmoothingMode.AntiAlias;
-            var widths = items.Select(i => TextRenderer.MeasureText(g, i.Text, Theme.Small, Size.Empty, TextFormatFlags.NoPadding).Width + 34).ToArray();
-            var width = widths.Sum() + 16;
+            var widths = items.Select(i => TextRenderer.MeasureText(g, i.Text, Theme.Small, Size.Empty, TextFormatFlags.NoPadding).Width + 38).ToArray();
+            var width = widths.Sum() + 12;
             if (width > Width - 20) return;
-            var box = new Rectangle(10, Height - 36, width, 26);
-            using (var path = Theme.RoundedRect(box, 8))
-            using (var fill = new SolidBrush(Color.FromArgb(235, 255, 255, 255)))
+            var box = new Rectangle(10, Height - 38, width, 28);
+            using (var path = Theme.RoundedRect(box, 9))
+            using (var fill = new SolidBrush(Color.FromArgb(240, 255, 255, 255)))
             using (var border = new Pen(Theme.Border))
             {
                 g.FillPath(fill, path);
                 g.DrawPath(border, path);
             }
 
-            var x = box.X + 10;
+            var x = box.X + 6;
             for (var i = 0; i < items.Length; i++)
             {
                 var item = items[i];
-                var text = item.Text;
+                item.Bounds = new Rectangle(x, box.Y + 3, widths[i] - 4, box.Height - 6);
                 var cy = box.Y + box.Height / 2f;
+                var color = item.Active ? item.Color : Theme.Blend(item.Color, Color.White, 0.72f);
+
+                if (item == _hoverLegend || !item.Active)
+                {
+                    using (var path = Theme.RoundedRect(item.Bounds, 6))
+                    using (var fill = new SolidBrush(item == _hoverLegend ? Color.FromArgb(234, 238, 244) : Color.FromArgb(246, 247, 250)))
+                    {
+                        g.FillPath(fill, path);
+                    }
+                }
+
+                var mark = x + 6;
                 switch (item.Style)
                 {
                     case LegendStyle.Dot:
-                        using (var brush = new SolidBrush(item.Color)) g.FillEllipse(brush, x + 4, cy - 5, 10, 10);
+                        using (var brush = new SolidBrush(color)) g.FillEllipse(brush, mark + 4, cy - 5, 10, 10);
                         break;
                     case LegendStyle.Square:
-                        using (var brush = new SolidBrush(item.Color))
-                        using (var path = Theme.RoundedRect(new RectangleF(x + 4, cy - 5, 10, 10), 2.5f))
+                        using (var brush = new SolidBrush(color))
+                        using (var path = Theme.RoundedRect(new RectangleF(mark + 4, cy - 5, 10, 10), 2.5f))
                         {
                             g.FillPath(brush, path);
                         }
                         break;
                     default:
-                        using (var pen = new Pen(item.Color, 1.8f))
+                        using (var pen = new Pen(color, 1.8f))
                         {
                             if (item.Style == LegendStyle.Dashed) pen.DashPattern = new[] { 3f, 2f };
-                            g.DrawLine(pen, x, cy, x + 18, cy);
+                            g.DrawLine(pen, mark, cy, mark + 18, cy);
                         }
                         break;
                 }
-                TextRenderer.DrawText(g, text, Theme.Small, new Point(x + 24, (int)cy - 7), Theme.Muted, TextFormatFlags.NoPadding);
+                var textColor = item.Active ? Theme.Text : Theme.Subtle;
+                var font = item.Active ? Theme.Small : StrikeSmall;
+                TextRenderer.DrawText(g, item.Text, font, new Point(mark + 24, (int)cy - 7), textColor, TextFormatFlags.NoPadding);
                 x += widths[i];
             }
         }
+
+        private static readonly Font StrikeSmall = new Font(Theme.Small, FontStyle.Strikeout);
 
         #endregion
 
@@ -363,6 +445,15 @@ namespace DataverseCartographer.UI.Controls
         {
             base.OnMouseDown(e);
             Focus();
+            var legend = e.Button == MouseButtons.Left ? LegendAt(e.Location) : null;
+            if (legend != null)
+            {
+                _legendClick = true;
+                legend.Active = !legend.Active;
+                Invalidate();
+                LegendItemToggled?.Invoke(this, legend);
+                return;
+            }
             if (e.Button != MouseButtons.Left) return;
             _mouseIsDown = true;
             _dragging = false;
@@ -401,12 +492,28 @@ namespace DataverseCartographer.UI.Controls
                 return;
             }
 
+            var legend = LegendAt(e.Location);
+            if (legend != _hoverLegend)
+            {
+                _hoverLegend = legend;
+                Invalidate(new Rectangle(0, Height - 44, Width, 44));
+            }
+            if (legend != null)
+            {
+                Cursor = Cursors.Hand;
+                return;
+            }
             UpdateHover(e.Location);
         }
 
         protected override void OnMouseUp(MouseEventArgs e)
         {
             base.OnMouseUp(e);
+            if (_legendClick)
+            {
+                _legendClick = false;
+                return;
+            }
             var world = ToWorld(e.Location);
             if (e.Button == MouseButtons.Right)
             {
@@ -452,6 +559,7 @@ namespace DataverseCartographer.UI.Controls
         protected override void OnMouseDoubleClick(MouseEventArgs e)
         {
             base.OnMouseDoubleClick(e);
+            if (LegendAt(e.Location) != null) return;
             if (e.Button != MouseButtons.Left) return;
             var node = NodeAt(ToWorld(e.Location));
             if (node != null) NodeDoubleClicked?.Invoke(this, node);
@@ -467,6 +575,11 @@ namespace DataverseCartographer.UI.Controls
         protected override void OnMouseLeave(EventArgs e)
         {
             base.OnMouseLeave(e);
+            if (_hoverLegend != null)
+            {
+                _hoverLegend = null;
+                Invalidate(new Rectangle(0, Height - 44, Width, 44));
+            }
             if (_state.HoverNode != null || _state.HoverEdge != null)
             {
                 _state.HoverNode = null;

@@ -55,6 +55,9 @@ namespace DataverseCartographer.Models
     {
         /// <summary>Tables of the selected solution (metadata ids), null = every table.</summary>
         public HashSet<Guid> SolutionTables { get; set; }
+
+        /// <summary>Tables of the selected model-driven app (metadata ids), null = every table.</summary>
+        public HashSet<Guid> AppTables { get; set; }
         public string Prefix { get; set; }
         public TableKindFilter Kind { get; set; }
         public bool HideSystemTables { get; set; } = true;
